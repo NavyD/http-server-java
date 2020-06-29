@@ -1,38 +1,40 @@
 package xyz.navyd.http;
 
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
-public class Response {
-    private Object body;
+import xyz.navyd.http.enums.StatusEnum;
 
-    public <T> T getBody() {
-        return (T)body;
+public class Response<T> {
+    private final StatusEnum status;
+    private final Map<String, String> headers;
+    private final T body;
+
+    public Response(StatusEnum status) {
+        this(status, null);
     }
-}
 
-interface Filter {
-    boolean filter(Request request, Response response);
-}
-
-
-class FilterManager {
-    private List<Filter> filters;
-    private List<ResponseHandler> respHandlers;
-
-    public boolean doFilter(Request request, Response response) {
-        for (Filter filter : filters) {
-            // reponse write
-            if (!filter.filter(request, response)) {
-                respHandlers.forEach(r -> {
-                    r.handle(response);
-                });
-                return false;
-            }
-        }
-        return true;
+    public Response(StatusEnum status, T body) {
+        this.status = status;
+        this.body = body;
+        this.headers = new HashMap<>();
     }
-}
 
-interface ResponseHandler {
-    void handle(Response response);
+    public StatusEnum getStatus() {
+        return status;
+    }
+
+    public Map<String, String> getHeaders() {
+        return headers;
+    }
+
+    public Optional<T> getBody() {
+        return Optional.ofNullable(body);
+    }
+
+    public Response<T> addHeader(String key, String val) {
+        this.headers.put(key, val);
+        return this;
+    }
 }

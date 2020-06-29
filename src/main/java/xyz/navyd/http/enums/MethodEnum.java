@@ -11,8 +11,7 @@ public enum MethodEnum {
     DELETE("DELETE"), // TODO DELETE method
     TRACE("TRACE"), // TODO TRACE method
     CONNECT("CONNECT"), // TODO CONNECT method
-    UNRECOGNIZED(null);
-
+    ;
     private String value;
 
     MethodEnum(String value) {

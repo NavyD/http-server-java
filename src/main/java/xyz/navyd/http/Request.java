@@ -1,7 +1,11 @@
 package xyz.navyd.http;
 
+import java.net.HttpCookie;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -15,13 +19,10 @@ public class Request {
     private VersionEnum version;
     private Map<String, String> headers;
     private ByteBuffer body;
+    private List<HttpCookie> cookies;
 
     /**
-     * <p>根据header.content-type和content-length判断是否用
-     * channel或json处理。
-     * 
-     * <p>当用户上传文件时或文本内容过大，用channel交给具体业务写，
-     * 避免内存溢出
+     * 不支持file上传，存在buffer size限制
      * 
      * @param <T>
      * @return
@@ -36,6 +37,19 @@ public class Request {
         this.headers = new HashMap<>();
         this.path = path;
         this.query = query;
+        this.cookies = new ArrayList<>(16);
+    }
+
+    /**
+     * 返回一个unmodifiableList
+     * @return
+     */
+    public List<HttpCookie> getCookies() {
+        return Collections.unmodifiableList(cookies);
+    }
+
+    public void addCookie(HttpCookie cookie) {
+        this.cookies.add(cookie);
     }
 
     public MethodEnum getMethod() {
@@ -56,6 +70,14 @@ public class Request {
 
     public Optional<String> getHeader(String key) {
         return Optional.ofNullable(this.headers.get(key));
+    }
+
+    /**
+     * 返回一个unmodifiable map
+     * @return
+     */
+    public Map<String, String> getHeaders() {
+        return Collections.unmodifiableMap(headers);
     }
 
     public String getPath() {
