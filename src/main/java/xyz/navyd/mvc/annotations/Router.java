@@ -22,18 +22,12 @@ public @interface Router {
     String[] value();
 
     /**
-     * 匹配http method
+     * 在controller method上匹配http method
+     * 支持多个匹配
      * 
-     * <p>当在controller上为空时，匹配所有http method，否则在
-     * class上的范围内找controller method, 在class未定义但在method为找时，将异常
-     * 
-     * <p>支持多个匹配
-     * 
-     * 如果class与method都是多个，则组合全部/parent/child
-     * 
-     * 
+     * <p>在class上定义的没有限定作用
      * 
      * @return
      */
-    MethodEnum[] methods() default {};
+    MethodEnum[] methods() default MethodEnum.GET;
 }

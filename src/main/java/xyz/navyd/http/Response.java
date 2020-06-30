@@ -37,4 +37,24 @@ public class Response<T> {
         this.headers.put(key, val);
         return this;
     }
+
+    public static <T> Response<T> with(StatusEnum status, T body) {
+        return new Response<>(status, body);
+    }
+
+    public static <T> Response<T> with(StatusEnum status) {
+        return new Response<>(status, null);
+    }
+
+    public static <T> Response<T> withOk(T body) {
+        return new Response<>(StatusEnum.OK_200, body);
+    }
+
+    public static <T> Response<T> withNotFound(T body) {
+        return new Response<>(StatusEnum.NOT_FOUND_404, body);
+    }
+
+    public static <T> Response<T> withNotFound() {
+        return new Response<>(StatusEnum.NOT_FOUND_404, null);
+    }
 }

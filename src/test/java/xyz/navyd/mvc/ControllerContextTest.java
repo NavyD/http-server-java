@@ -1,10 +1,7 @@
 package xyz.navyd.mvc;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import xyz.navyd.BaseTest;
@@ -12,49 +9,48 @@ import xyz.navyd.http.Request;
 import xyz.navyd.http.enums.MethodEnum;
 import xyz.navyd.http.enums.VersionEnum;
 import xyz.navyd.mvc.test_pkg.router.a.EmptyRouterMethodOnControllerMethod;
-import xyz.navyd.mvc.test_pkg.router.b.HomeController;
+import xyz.navyd.mvc.test_pkg.router.basic.UserController;
 
 public class ControllerContextTest extends BaseTest {
     @Test
-    void basicsScanRouter() {
+    void getUsersWithRouter() {
         var context = ControllerContext.newInstance();
-        context.scanPackage(HomeController.class.getPackageName());
-        var request = new Request(MethodEnum.GET, "/home", null, VersionEnum.HTTP1_1);
-        var cm = context.getControllerMethod(request);
-        assertThat(cm)
-            .isNotNull()
-            .isNotEmpty();
-        assertThat(cm.get()).matches(con ->
-            con.getController() instanceof HomeController)
-            .matches(con -> con.getHttpMethod() == request.getMethod())
-            .matches(con -> con.getMethod().getName().contains("getHelloWorld"))
-            .matches(con -> con.getPath().equals("/home"));
+        context.scanPackage(UserController.class.getPackageName());
+        var request = new Request(MethodEnum.GET, "/host/users", null, VersionEnum.HTTP1_1);
+        var component = context.getControllerComponent(request);
+        assertTrue(component.isPresent());
     }
 
     @Test
-    void regexMatchTest() {
+    void getUserWithRouterRegex() {
         var context = ControllerContext.newInstance();
-        context.scanPackage(HomeController.class.getPackageName());
-        var request = new Request(MethodEnum.GET, "/users/123", null, VersionEnum.HTTP1_1);
-        var cm = context.getControllerMethod(request);
-        assertThat(cm)
-            .isNotNull()
-            .isNotEmpty();
-        assertThat(cm.get())
-            .matches(con -> con.getController() instanceof HomeController)
-            .matches(con -> request.getPath().matches(con.getPath()))
-            .matches(con -> con.getHttpMethod() == request.getMethod())
-            .matches(con -> con.getMethod().getName().contains("getUser"));
+        context.scanPackage(UserController.class.getPackageName());
+        var request = new Request(MethodEnum.GET, "/host/users/1", null, VersionEnum.HTTP1_1);
+        var component = context.getControllerComponent(request);
+        assertTrue(component.isPresent());
+        assertTrue(component.get().controller instanceof UserController);
     }
 
     @Test
-    void routerMethodsEmptyError() {
-        var exc = assertThrows(IllegalArgumentException.class, () -> ControllerContext
-                .newInstance()
-                .scanPackage(EmptyRouterMethodOnControllerMethod.class.getPackageName()));
-        assertTrue(exc.getMessage().contains("empty") && exc.getMessage().contains("methods"));
+    void routerMethodsEmptyAsDefaultGetMethod() {
+        var context = ControllerContext.newInstance();
+        context.scanPackage(EmptyRouterMethodOnControllerMethod.class.getPackageName());
+        // 在单独的包
+        assertTrue(context.getPathComponents().size() == 1);
+        var methods = context.getPathComponents().entrySet().iterator().next().getValue().get(0).router.methods();
+        assertTrue(methods.length == 1 && methods[0] == MethodEnum.GET);
     }
 
-
+    private static <T> boolean contains(T[] arrays, T t) {
+        if (t == null) {
+            throw new NullPointerException();
+        }
+        for (var e : arrays) {
+            if (e == null)
+                continue;
+            else if (e.equals(t))
+                return true;
+        }
+        return false;
+    }
 }
-

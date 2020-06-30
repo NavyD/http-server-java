@@ -6,7 +6,7 @@ import xyz.navyd.mvc.annotations.Router;
 @Controller
 @Router("/")
 public class EmptyRouterMethodOnControllerMethod {
-    @Router("/empty_error")
+    @Router("/default_get")
     void emptyRouterMethod() {
 
     }

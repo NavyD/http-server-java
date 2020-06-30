@@ -2,14 +2,13 @@ package xyz.navyd.mvc;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.reflections.Reflections;
-import org.reflections.scanners.TypeAnnotationsScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,9 +20,8 @@ import xyz.navyd.mvc.annotations.Router;
 
 public class ControllerContext {
     private static final Logger log = LoggerFactory.getLogger(Controller.class);
-    // private static final ControllerContext INSTANCE = new ControllerContext();
 
-    private final Set<ControllerMethod> controllers = new HashSet<>(256);
+    private final Map<String, List<ControllerComponent>> pathComponents = new HashMap<>();
 
     ControllerContext() {
 
@@ -38,7 +36,7 @@ public class ControllerContext {
         var refs = new Reflections(pkg);
         // true避免 org.reflections.ReflectionsException: Scanner SubTypesScanner was not configured
         for (var controllerClazz : refs.getTypesAnnotatedWith(Controller.class, true)) {
-            log.trace("scanning controller: {}", controllerClazz.getCanonicalName());
+            log.trace("scanning controller: {}", controllerClazz.getName());
             var routerOnClass = controllerClazz.getAnnotation(Router.class);
             // router class not found
             if (routerOnClass == null) {
@@ -65,7 +63,7 @@ public class ControllerContext {
                     e.printStackTrace();
                 }
                 if (controller != null) {
-                    build(controllers, routerOnClass, routerOnMethod, controller, method);
+                    buildComponents(routerOnClass, routerOnMethod, controller, method);
                     log.debug("controller method added: {}.{}()", controllerClazz.getName(), method.getName());
                 }
             }
@@ -77,169 +75,132 @@ public class ControllerContext {
     }
 
     /**
-     * test可用
+     * 如果request.path在pathControllers中被找到或正则匹配到，并request.method被
+     * 包含在Router中，则返回ControllerComponent
      * @param request
      * @return
      */
-    Optional< ControllerMethod> getControllerMethod(Request request) {
-        log.debug("controllers size: {}", controllers.size());
-        for (var cm : controllers) {
-            log.debug("cm: {}, request: {}", cm, request);
-            if (cm.httpMethod == request.getMethod() && request.getPath().matches(cm.getPath())) {
-                return Optional.of(cm);
+    Optional<ControllerComponent> getControllerComponent(Request request) {
+        return getControllerComponent(request.getPath(), request.getMethod());
+    }
+
+    Map<String, List<ControllerComponent>> getPathComponents() {
+        return pathComponents;
+    }
+
+    private Optional<ControllerComponent> getControllerComponent(String path, MethodEnum method) {
+        // 直接匹配
+        var components = pathComponents.get(path);
+        if (components != null) {
+            for (var component : components) {
+                if (contains(component.router.methods(), method)) {
+                    return Optional.of(component);
+                }
+            }
+        }
+        
+        // 正则匹配
+        for (var entry : pathComponents.entrySet()) {
+            components = entry.getValue();
+            if (path.matches(entry.getKey())) {
+                for (var component : components) {
+                    if (contains(component.router.methods(), method)) {
+                        return Optional.of(component);
+                    }
+                }
             }
         }
         return Optional.empty();
     }
 
-    private static void build(Set<ControllerMethod> controllers, Router parent, Router child, Object controller, Method method) {
+    private void buildComponents(Router parent, Router child, Object controller, Method method) {
         log.trace("start build ControllerMethod");
-        
         // paths
         StringBuilder sb = new StringBuilder();
         for (var parentPath : parent.value()) {
             if (parentPath.isBlank() || parentPath.isEmpty()) {
                 continue;
-            } else if (!"/".equals(parentPath)) {
+            } 
+            // ignore single '/' on class router
+            else if (!"/".equals(parentPath)) {
                 sb.append(parentPath);
             }
             for (var childPath : child.value()) {
                 if (childPath.isBlank() || childPath.isEmpty()) {
                     continue;
-                } else if (child.methods().length == 0) {
+                } 
+                // router.methods empty is not allowed on methods
+                if (child.methods().length == 0) {
                     log.error("not found router.methods on {}.{}()", controller.getClass().getName(), method.getName());
                     throw new IllegalArgumentException("router.methods is empty");
                 }
                 var path = sb.append(childPath).toString();
-                // methods
-                for (var childHttpMethod : child.methods()) {
-                    // allow all when class methods is empty
-                    boolean httpMethodExists = parent.methods().length == 0;
-                    // find method in parent methods
-                    for (var parentHttpMethod : parent.methods()) {
-                        if (parentHttpMethod == childHttpMethod) {
-                            httpMethodExists = true;
-                            break;
-                        }
-                    }
-                    if (!httpMethodExists) {
-                        log.error(
-                            "skipped http method, child exists in a http method: {}, but parent does not http methods: {}." +
-                            "on controller: {}, method: {}",
-                            childHttpMethod, 
-                            Arrays.toString(parent.methods()),
-                            controller.getClass().getName(),
-                            method.getName());
-                        throw new IllegalArgumentException("router on class http methods not found on methods");
-                    }
-                    var cm = new ControllerMethod(controller, method, childHttpMethod, path);
-                    if (!controllers.add(cm)) {
-                        ControllerMethod dupCm = null;
-                        for (var c : controllers) {
-                            if (c.equals(cm)) {
-                                dupCm = c;
-                                break;
-                            }
-                        }
-                        log.error(
-                            "found duplicate for path: {}, http method: {} in {}.{}() and {}.{}()",
-                            cm.getPath(),
-                            cm.getHttpMethod(),
-                            dupCm.getController().getClass().getName(),
-                            dupCm.getMethod().getName(),
-                            cm.getController().getClass().getName(),
-                            cm.getMethod().getName());
-                        throw new IllegalArgumentException("found duplicate controller router!");
-                    }
-                    log.trace("context added: {}", cm);
-                }
+                checkDuplicateRouter(path, child, controller, method);
+                var component = new ControllerComponent(controller, method, child);
+                var components = pathComponents.getOrDefault(path, new ArrayList<>(8));
+                components.add(component);
+                pathComponents.put(path, components);
+                log.trace("context added: {}", component);
                 sb.setLength(parentPath.length());
             }
             sb.setLength(0);
         }
     }
+
     /**
-     * 在sb中找出反斜线'\'并插入一个'\'使用于正则表达式
-     * @param sb
-     * @return
+     * 如果path与childRouter已存在则异常
+     * @param path
+     * @param childRouter
+     * @param controller
+     * @param method
      */
-    static StringBuilder appendBlackSlash(StringBuilder sb) {
-        int i = 0;
-        while (true) {
-            i = sb.indexOf("\\", i);
-            if (i < 0) {
-                break;
+    private void checkDuplicateRouter(String path, Router childRouter, Object controller, Method method) {
+        for (var childHttpMethod : childRouter.methods()) {
+            // only one router for path, method
+            var oldComponent = getControllerComponent(path, childHttpMethod);
+            // 路径一样 method一样
+            if (oldComponent.isPresent()) {
+                log.error("found duplicate for path: {}, http method: {} in {}.{}() and {}.{}()", 
+                    path,
+                    childHttpMethod, 
+                    oldComponent.get().controller.getClass().getName(), 
+                    oldComponent.get().method.getName(),
+                    controller.getClass().getName(), 
+                    method.getName());
+                throw new IllegalArgumentException("found duplicate controller router!");
             }
-            sb.insert(i, "\\");
-            i++;
         }
-        return sb;
+        
     }
 
-    /**
-     * test可用
-     */
-    static class ControllerMethod {
-        private final Object controller;
-        private final Method method;
-        private final MethodEnum httpMethod;
-        private final String path;
+    static class ControllerComponent {
+        final Object controller;
+        final Method method;
+        final Router router;
 
-        public ControllerMethod(Object controller, Method method, MethodEnum httpMethod, String path) {
+        public ControllerComponent(Object controller, Method method, Router router) {
             this.controller = controller;
             this.method = method;
-            this.httpMethod = httpMethod;
-            this.path = path;
+            this.router = router;
         }
 
         @Override
         public String toString() {
-            return "ControllerMethod [controller=" + controller + ", httpMethod=" + httpMethod + ", method=" + method
-                    + ", path=" + path + "]";
+            return "ControllerComponent [controller=" + controller + ", method=" + method + ", router=" + router + "]";
         }
+        
+    }
 
-        public Object getController() {
-            return controller;
+    private static <T> boolean contains(T[] arrays, T t) {
+        if (t == null) {
+            throw new NullPointerException();
         }
-
-        public Method getMethod() {
-            return method;
-        }
-
-        public MethodEnum getHttpMethod() {
-            return httpMethod;
-        }
-
-        public String getPath() {
-            return path;
-        }
-
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + ((httpMethod == null) ? 0 : httpMethod.hashCode());
-            result = prime * result + ((path == null) ? 0 : path.hashCode());
-            return result;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj)
+        for (var e : arrays) {
+            if (e == null) 
+                continue;
+            else if (e.equals(t))
                 return true;
-            if (obj == null)
-                return false;
-            if (getClass() != obj.getClass())
-                return false;
-            ControllerMethod other = (ControllerMethod) obj;
-            if (httpMethod != other.httpMethod)
-                return false;
-            if (path == null) {
-                if (other.path != null)
-                    return false;
-            } else if (!path.equals(other.path))
-                return false;
-            return true;
         }
+        return false;
     }
 }
