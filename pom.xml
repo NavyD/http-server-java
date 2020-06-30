@@ -16,6 +16,7 @@
         <logback.version>1.2.3</logback.version>
         <assertj.version>3.16.1</assertj.version>
         <reflections.version>0.9.12</reflections.version>
+        <jackson.version>2.10.0</jackson.version>
     </properties>
 
     <dependencies>
@@ -48,6 +49,11 @@
             <artifactId>reflections</artifactId>
             <version>${reflections.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.11.1</version>
+          </dependency>
     </dependencies>
     <build>
         <plugins>

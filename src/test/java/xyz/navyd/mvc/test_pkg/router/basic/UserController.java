@@ -10,6 +10,7 @@ import xyz.navyd.http.Response;
 import xyz.navyd.http.enums.MethodEnum;
 import xyz.navyd.http.enums.StatusEnum;
 import xyz.navyd.mvc.annotations.Controller;
+import xyz.navyd.mvc.annotations.PathParam;
 import xyz.navyd.mvc.annotations.Router;
 
 @Controller
@@ -31,8 +32,8 @@ public class UserController {
         return new Response<>(StatusEnum.OK_200, users.values());
     }
 
-    @Router(value = "/users/\\d+", methods = MethodEnum.GET)
-    Response<Optional<User>> getUser(Integer uid) {
+    @Router(value = "/users/(\\d+)", methods = MethodEnum.GET)
+    Response<Optional<User>> getUser(@PathParam Integer uid) {
         return new Response<>(StatusEnum.OK_200, Optional.ofNullable(users.get(uid)));
     }
 
